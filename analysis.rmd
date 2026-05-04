@@ -1,0 +1,452 @@
+---
+title: "mlasessment2026"
+output: html_document
+date: "2026-02-03"
+---
+
+```{r}
+#import dataset and necessary libraries 
+data <- read.csv('assignment2026.csv')
+library(tidyverse)
+```
+
+```{r}
+str(data) #examine structure of dataset 
+sum(!complete.cases(data)) #counts # of NAs 
+table(data$treat1) #look at split of treatment 1
+table(data$treat2) #look at split of treatment 2
+table(data$death) #look at split of deaths 
+```
+
+## Section 1 -- descriptive statistics and exploratory analysis
+
+```{r}
+#examine the percentage of deaths between each of the treatment combinations 
+table_clean <- data %>% 
+  group_by(treat1, treat2) %>% 
+  summarise(
+    N = n(),
+    Deaths = sum(death),
+    `Death (%)` = round(100 * mean(death), 3),
+    .groups = "drop"
+  )
+
+table_clean <- table_clean %>%
+  mutate(
+    treat1 = recode(treat1,
+                    "L" = "Low",
+                    "M" = "Medium",
+                    "N" = "None"),
+    treat2 = recode(treat2,
+                    "Y" = "Yes",
+                    "N" = "No"))
+
+print(table_clean)
+```
+
+```{r}
+#compare age and gender distribution between deaths and survived
+#compare age
+data %>% 
+  ggplot(aes(age, y = after_stat(density), fill = factor(death))) + geom_histogram() + facet_wrap(~ death)+
+  labs(title = 'Age Distributions By Mortality Status',
+       x = 'Age',
+       y = 'Density') +
+  scale_fill_discrete(
+  name = "Survival Status",
+  labels = c("Survived", "Died"))
+
+#compare gender
+data %>% 
+  ggplot(aes(x = factor(death), fill = gender)) +
+  geom_bar(position = "fill") +
+  scale_x_discrete(
+    labels = c("0" = "Survived",
+               "1" = "Deaths")) +
+  labs(x = "Outcome",
+       y = 'Count',
+       title = 'Survival Outcomes by Gender') +
+  scale_fill_discrete(
+  name = "Gender",
+  labels = c("Female", "Male"))
+  
+```
+
+```{r}
+#compare delay between deaths and survived 
+data %>% 
+  ggplot(aes(delay, y = after_stat(density), fill = factor(death))) + geom_histogram() + facet_wrap(~death) +
+   scale_fill_discrete(
+  name = "Survival Status",
+  labels = c("Survived", "Died")) +
+  labs(title = "Distribution of Time (hrs) between Stroke and Treatment",
+       x = 'Time (hours)',
+       y = 'Density')
+  
+  
+```
+
+```{r}
+#compare consciousness level, symptoms after waking, atrial fib, CT scan, infarction, heparin, asparin, and stroke subtype between deaths and survived
+variables_to_plot <- c('consc', 'wakesym', 'atrial', 'CT', 'Infarc', 'hep24', 'asp3', 'subtype')
+
+for (var in variables_to_plot) {
+  p <- data %>% 
+  ggplot(aes(x = .data[[var]], fill = factor(death))) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = paste("Mortality Proportion by", var),
+    x = var,
+    y = "Proportion",
+    fill = "Outcome"
+  )
+  
+  print(p)
+}
+```
+
+
+```{r}
+#Cleaned up graphs of variables with noticeable differences
+
+#consc
+data %>% 
+  ggplot(aes(x = consc, fill = factor(death))) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = paste("Mortality Proportion by Consciousness Level at Treatment"),
+    x = "Consciousness Level",
+    y = "Proportion",
+    fill = "Outcome"
+  )+
+   scale_x_discrete(
+    labels = c("D" = "Drowsy",
+               "F" = "Fully Conscious"))+
+    scale_fill_discrete(
+  name = "Survival Outcome",
+  labels = c("Survived", "Died"))
+
+#atrial
+data %>% 
+  ggplot(aes(x = atrial, fill = factor(death))) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = paste("Mortality Proportion by Atrial Fibrillation Presence"),
+    x = "Atrial Fibrillation Presence",
+    y = "Proportion",
+    fill = "Outcome"
+  )+
+   scale_x_discrete(
+    labels = c("N" = "Not present",
+               "Y" = "Present"))+
+    scale_fill_discrete(
+  name = "Survival Outcome",
+  labels = c("Survived", "Died"))
+
+#subtype
+data %>% 
+  ggplot(aes(x = subtype, fill = factor(death))) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = paste("Mortality Proportion by Stroke Subtype"),
+    x = "Stroke Subtype",
+    y = "Proportion",
+    fill = "Outcome"
+  )+
+    scale_fill_discrete(
+  name = "Survival Outcome",
+  labels = c("Survived", "Died"))
+
+```
+
+```{r}
+#systolic blood pressure comparison between deaths and survived
+data %>% 
+  ggplot(aes(sbp, y = after_stat(density), fill = factor(death))) + geom_histogram() + facet_wrap(~ death)
+```
+
+```{r}
+#proportion of deaths for the presence of each symptom 
+symptom_vars <- c("symptom1", "symptom2", "symptom3", "symptom4", 
+                  "symptom5", "symptom6", "symptom7", "symptom8")
+
+#put each symptom in its own row 
+data_long <- data %>%
+  pivot_longer(cols = all_of(symptom_vars), 
+               names_to = "symptom", 
+               values_to = "present")
+
+data_long %>%
+  filter(present == "Y") %>%  
+  ggplot(aes(x = symptom, fill = factor(death))) +
+  geom_bar(position = "fill") +
+  labs(title = 'Mortality Proportion by Symptom',
+       x = 'Symptom',
+       y = 'Proportion'
+  )+
+    scale_fill_discrete(
+  name = "Survival Outcome",
+  labels = c("Survived", "Died"))
+
+#correlation between symptoms 
+library(ggcorrplot)
+
+#relevel symptoms to be numeric 
+data_symp <- data %>%
+  mutate(across(all_of(symptom_vars),
+                ~ ifelse(. == "Y", 1, 0)))
+
+ggcorrplot(cor(data_symp[,symptom_vars]))
+```
+
+```{r}
+#obtain training and validation sets 
+library(caret) 
+
+psamp <- .2 #set proportion 
+set.seed(20)
+n <- nrow(data)
+testind <- sample.int(n, psamp * n)
+datatr <- data[-testind,] #obtain training data set
+dataval <- data[testind,] #obtain validation data set 
+```
+
+## Section 2 -- regularized regression
+
+```{r}
+# Extract data as matrices
+library(glmnet)
+x <- model.matrix(death ~ . - 1, datatr)
+y <- datatr$death
+
+#find optimal lambda
+set.seed(20)
+lasso.cv <- cv.glmnet(x,y,alpha=1,family="binomial",
+                    standardize = TRUE,
+                    type.measure = 'deviance', 
+                    nfolds = 10)
+plot(lasso.cv)
+bestlambda <- lasso.cv$lambda.min
+print(bestlambda)
+
+#refit lasso with best lambda
+lasso.mod <- glmnet(x,y,alpha=1,family="binomial",
+                  lambda=bestlambda,standardize = TRUE)
+
+#examine regression coefficients with best lambda
+lasso_coefs <- lasso.mod$beta 
+print(bestlambda)
+
+```
+
+```{r}
+#clean up coefficient matrix (for presentation)
+lasso_coefs_df <- as.data.frame(round(as.matrix(coef(lasso.mod)), 4))
+lasso_coefs_df$Variable <- rownames(lasso_coefs_df)
+rownames(lasso_coefs_df) <- NULL
+colnames(lasso_coefs_df)[1] <- "Coefficient"
+print(lasso_coefs_df)
+
+
+```
+
+
+```{r}
+x_val <- model.matrix(death ~ . - 1, dataval)
+y_val <- dataval$death
+
+problasso <- predict(lasso.mod, newx = x_val, type = "response")
+
+pred_class <- ifelse(problasso > 0.5, 1, 0)
+
+#make both factors with same levels
+pred_factor <- factor(pred_class, levels = c(0, 1),
+                      labels = c("Survived", "Death"))
+y_val_factor <- factor(y_val, levels = c(0, 1),
+                       labels = c("Survived", "Death"))
+
+#make confusion matrix
+lassocmat <- confusionMatrix(pred_factor, y_val_factor, positive = "Death")
+print(lassocmat)
+```
+
+
+```{r}
+#look at variable importance
+lassoimp <- coef(lasso.mod)
+lasso10 <- lassoimp[-1,] %>%  abs() %>%  sort(dec = T) %>% head(10)
+print(lasso10)
+```
+
+```{r}
+#clean up top variables (for presentation)
+lasso10 <- lasso10 %>% as.data.frame()
+lasso10
+```
+
+## Section 3 -- Tree based method
+```{r}
+library(xgboost)
+#set up variables 
+X_train <- model.matrix(death ~ . - 1, datatr)
+Y_train <- datatr$death
+
+X_val <- model.matrix(death ~ . - 1, dataval)
+Y_val <- dataval$death
+Y_train_numeric <- as.numeric(as.character(datatr$death))
+
+#create matrix for xgboost
+xgdata <- xgb.DMatrix(data = X_train, label = as.numeric(Y_train_numeric))
+
+#tune the number of iterations and max depth 
+set.seed(20)
+max_depth_values <- c(3, 4, 5, 6, 8)
+depth_results <- data.frame()
+
+for(depth in max_depth_values) {
+  
+  params <- list(
+    objective = "binary:logistic",
+    eval_metric = "logloss",
+    max_depth = depth  
+  )
+  
+  #cross validation - 10-fold 
+  xgcv <- xgb.cv(
+    data = xgdata,
+    params = params,
+    nrounds = 500,
+    nfold = 10, 
+    verbose = FALSE
+  )
+  
+  #extract best results for best max_depth
+  best_iter <- which.min(xgcv$evaluation_log$test_logloss_mean)
+  best_logloss <- min(xgcv$evaluation_log$test_logloss_mean)
+  
+  #store results in data frame
+  depth_results <- rbind(depth_results, data.frame(
+  max_depth = depth,
+    best_nrounds = best_iter,
+    cv_logloss = best_logloss
+  ))
+  
+}
+
+print(depth_results)
+
+#find best max_depth, nrounds, and logloss 
+best_depth <- depth_results$max_depth[which.min(depth_results$cv_logloss)]
+best_nrounds <- depth_results$best_nrounds[which.min(depth_results$cv_logloss)]
+best_logloss <- min(depth_results$cv_logloss)
+
+#reset params
+params_best <- list(
+  objective = "binary:logistic",
+  eval_metric = "logloss",
+  max_depth = best_depth)
+
+#redo cross validation with best parameters
+xgcv_best <- xgb.cv(
+  data = xgdata,
+  params = params_best,
+  nrounds = 500,
+  nfold = 10,
+  verbose = FALSE
+)
+
+#plot the loss function
+plot(test_logloss_mean ~ iter, data = xgcv_best$evaluation_log, 
+     col = "darkgreen", 
+     type = "b", pch = 16, 
+     ylab = "Test Log-Loss", 
+     xlab = "Iteration", 
+     xlim = c(0, 100),
+     main = paste("Cross-Validation (max_depth =", best_depth, ")"))
+abline(v = best_nrounds, lty = 2, col = "red", lwd = 2)
+text(best_nrounds, par("usr")[3] + 0.01, 
+     labels = paste("Best:", best_nrounds), 
+     pos = 4, col = "red")
+
+#refit final model with optimal parameters 
+xgb_final <- xgb.train(
+  data = xgdata,
+  nrounds = best_nrounds,
+  params = params_best,  
+  verbose = FALSE)
+```
+
+
+```{r}
+#get predictions
+probxgb <- predict(xgb_final, X_val)
+
+#convert to factor with labels
+predxgb <- factor(probxgb > 0.5, 
+                  levels = c(FALSE, TRUE),
+                  labels = c("Survived", "Death"))
+
+#change values to factor
+Y_val_factor <- factor(Y_val, 
+                       levels = c(0, 1),
+                       labels = c("Survived", "Death"))
+
+#make confusion matrix
+xgbcmat <- confusionMatrix(predxgb, Y_val_factor, positive = "Death")
+print(xgbcmat)
+```
+
+
+```{r}
+#assess variable importance 
+xgbimpmat <- xgb.importance(model = xgb_final)
+
+xgbimpmat %>%
+  head(10) %>%
+  select(Feature, Gain)
+
+```
+ 
+
+## Section 4 -- Comparision of methods 
+```{r}
+#comparision of predictions of validation sets (makes a table)
+knitr::kable(data.frame(
+  Model = c("Lasso", "XGBoost"),
+  Accuracy = sprintf("%2.2f %%", c(lassocmat$overall["Accuracy"], 
+                                    xgbcmat$overall["Accuracy"]) * 100),
+  Sensitivity = sprintf("%2.2f %%", c(lassocmat$byClass["Sensitivity"], 
+                                       xgbcmat$byClass["Sensitivity"]) * 100),
+  Specificity = sprintf("%2.2f %%", c(lassocmat$byClass["Specificity"], 
+                                       xgbcmat$byClass["Specificity"]) * 100)
+))
+
+```
+
+```{r}
+#comparison of variable importance 
+#lasso top 10
+lasso_top10 <- lassoimp[-1,] %>% abs() %>% sort(decreasing = TRUE) %>% head(10)
+lasso_vars <- names(lasso_top10)
+
+#xgboost top 10
+xgb_vars <- head(xgbimpmat$Feature, 10)
+
+knitr::kable(data.frame(
+  Rank = 1:10,
+  Lasso = lasso_vars,
+  XGBoost = xgb_vars
+))
+
+```
+
+
+
+
+
+
+
